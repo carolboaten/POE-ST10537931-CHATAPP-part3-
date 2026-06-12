@@ -1,0 +1,493 @@
+
+
+import java.util.Scanner;
+import java.util.ArrayList;
+import java.io.*;
+import java.util.Arrays;
+import java.util.Iterator;
+
+// --------------------------- CLASS 1: LOGIN ---------------------------
+class Login {
+    private String username;
+    private String password;
+    private String cellNumber;
+    private String firstName;
+    private String lastName;
+
+    public boolean checkUserName(String username) {
+        return username.contains("_");
+    }
+
+    public boolean checkPasswordComplexity(String password) {
+        if (password.length() < 8) return false;
+        boolean hasCapital = false;
+        boolean hasNumber = false;
+        boolean hasSpecial = false;
+        for (char c : password.toCharArray()) {
+            if (Character.isUpperCase(c)) hasCapital = true;
+            if (Character.isDigit(c)) hasNumber = true;
+            if (!Character.isLetterOrDigit(c)) hasSpecial = true;
+        }
+        return hasCapital && hasNumber && hasSpecial;
+    }
+
+    public boolean checkCellPhoneNumber(String cell) {
+        return cell.startsWith("+") && cell.length() <= 12;
+    }
+
+    public String registerUser(String username, String password, String cell, String firstName, String lastName) {
+        this.username = username;
+        this.password = password;
+        this.cellNumber = cell;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        return "User registered successfully.";
+    }
+
+    public boolean loginUser(String username, String password) {
+        return this.username != null && this.username.equals(username) && this.password.equals(password);
+    }
+
+    public String returnLoginStatus(String username, String password) {
+        if (loginUser(username, password)) {
+            return "Welcome " + this.firstName + " " + this.lastName + ", it is great to see you again.";
+        }
+        return "Username or password incorrect, please try again.";
+    }
+
+    
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+}
+
+// --------------------------- CLASS 2: MESSAGE ---------------------------
+class Message {
+    private String messageID;
+    private int messageNumber;
+    private String recipient;
+    private String messageText;
+    private String messageHash;
+    private Scanner scanner;
+
+    // Part 2 static fields
+    private static ArrayList<String> allSentMessages = new ArrayList<>();
+    private static int totalMessagesSent = 0;
+
+    // Part 3 static arrays (tab‑separated entries)
+    static ArrayList<String> sentMessagesArray   = new ArrayList<>();
+    static ArrayList<String> disregardedMessages = new ArrayList<>();
+    static ArrayList<String> storedMessagesArray = new ArrayList<>();
+    static ArrayList<String> messageHashArray    = new ArrayList<>();
+    static ArrayList<String> messageIDArray      = new ArrayList<>();
+    static String senderName = "";   
+
+    
+    public Message(int messageNumber, Scanner scanner) {
+        this.messageNumber = messageNumber;
+        this.scanner = scanner;
+        this.messageID = generateID();
+    }
+
+    private String generateID() {
+        long id = (long) (Math.random() * 9_000_000_000L) + 1_000_000_000L;
+        return String.valueOf(id);
+    }
+
+    public boolean checkMessageID() {
+        return messageID.length() <= 10;
+    }
+
+    public String checkRecipientCell(String cell) {
+        if (cell.startsWith("+") && cell.length() <= 12) {
+            return "Cell number accepted.";
+        }
+        return "Invalid cell number. Must start with + and be no more than 12 characters.";
+    }
+
+    public String createMessageHash() {
+        String idStart = messageID.substring(0, 2);
+        String[] words = messageText.trim().split("\\s+");
+        String firstWord = words[0];
+        String lastWord = words[words.length - 1];
+        messageHash = (idStart + ":" + messageNumber + ":" + firstWord + lastWord).toUpperCase();
+        return messageHash;
+    }
+
+     
+    public String sentMessage() {
+        
+        String entry = messageID + "\t" + messageHash + "\t" + recipient + "\t" + messageText + "\t" + senderName;
+
+        System.out.println("What would you like to do?");
+        System.out.println("1) Send Message");
+        System.out.println("2) Discard Message");
+        System.out.println("3) Store Message to send later");
+        System.out.print("Your choice: ");
+        String choice = scanner.nextLine();
+
+        switch (choice) {
+            case "1":
+                totalMessagesSent++;
+                allSentMessages.add("ID: " + messageID + " | Hash: " + messageHash + " | To: " + recipient + " | Msg: " + messageText);
+                // Part 3 additions
+                sentMessagesArray.add(entry);
+                messageHashArray.add(messageHash);
+                messageIDArray.add(messageID);
+                return "Message successfully sent.";
+
+            case "2":
+                
+                disregardedMessages.add(entry);
+                return "Press 0 to delete the message.";
+
+            case "3":
+                storeMessage();
+                
+                storedMessagesArray.add(entry);
+                messageHashArray.add(messageHash);
+                messageIDArray.add(messageID);
+                return "Message successfully stored.";
+
+            default:
+                return "Invalid choice.";
+        }
+    }
+
+    
+    public void storeMessage() {
+        String json = "{\n" +
+                "    \"messageID\": \"" + messageID + "\",\n" +
+                "    \"sender\": \"" + senderName + "\",\n" +
+                "    \"messageNumber\": \"" + messageNumber + "\",\n" +
+                "    \"recipient\": \"" + recipient + "\",\n" +
+                "    \"message\": \"" + messageText + "\",\n" +
+                "    \"hash\": \"" + messageHash + "\"\n" +
+                "}\n";
+        try (FileWriter fw = new FileWriter("stored_messages.json", true)) {
+            fw.write(json);
+            System.out.println("Saved to stored_messages.json");
+        } catch (IOException e) {
+            System.out.println("Could not save: " + e.getMessage());
+        }
+    }
+
+    public static String printMessages() {
+        if (allSentMessages.isEmpty()) {
+            return "No messages were sent this session.";
+        }
+        StringBuilder sb = new StringBuilder("\n====== ALL SENT MESSAGES =======\n");
+        for (String msg : allSentMessages) {
+            sb.append("-> ").append(msg).append("\n");
+        }
+        return sb.toString();
+    }
+
+    public static int returnTotalMessages() {
+        return totalMessagesSent;
+    }
+
+    // ---------- Part 3: load stored messages from JSON ----------
+    public static void loadStoredMessagesFromFile() {
+        storedMessagesArray.clear();
+        File file = new File("stored_messages.json");
+        if (!file.exists()) return;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            String id = "", hash = "", recip = "", msg = "", sender = "";
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.contains("\"messageID\""))    id = jsonValue(line);
+                else if (line.contains("\"sender\""))  sender = jsonValue(line);
+                else if (line.contains("\"recipient\"")) recip = jsonValue(line);
+                else if (line.contains("\"message\"")) msg = jsonValue(line);
+                else if (line.contains("\"hash\""))    hash = jsonValue(line);
+                else if (line.startsWith("}") && !id.isEmpty()) {
+                    storedMessagesArray.add(id + "\t" + hash + "\t" + recip + "\t" + msg + "\t" + sender);
+                    if (!messageIDArray.contains(id))   messageIDArray.add(id);
+                    if (!messageHashArray.contains(hash)) messageHashArray.add(hash);
+                    id = ""; hash = ""; recip = ""; msg = ""; sender = "";
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading stored messages file: " + e.getMessage());
+        }
+    }
+
+    private static String jsonValue(String line) {
+        int keyClose = line.indexOf('"', line.indexOf('"') + 1);
+        int colon = line.indexOf(':', keyClose);
+        if (colon < 0) return "";
+        String val = line.substring(colon + 1).trim();
+        if (val.endsWith(",")) val = val.substring(0, val.length() - 1).trim();
+        if (val.startsWith("\"") && val.endsWith("\""))
+            return val.substring(1, val.length() - 1);
+        return val;
+    }
+
+    // ---------- Part 3: Six new methods (a – f) ----------
+    public static String displayStoredSenderRecipient() {
+        if (storedMessagesArray.isEmpty()) return "No stored messages found.";
+        StringBuilder sb = new StringBuilder("\n--- STORED MESSAGES: SENDER & RECIPIENT ---\n");
+        for (String raw : storedMessagesArray) {
+            String[] p = raw.split("\t", -1);
+            String sender = (p.length > 4 && !p[4].isEmpty()) ? p[4] : senderName;
+            sb.append("Sender: ").append(sender).append("  |  Recipient: ").append(p[2]).append("\n");
+        }
+        return sb.toString();
+    }
+
+    public static String getLongestMessage() {
+        String longest = "";
+        java.util.List<ArrayList<String>> all = Arrays.asList(sentMessagesArray, storedMessagesArray, disregardedMessages);
+        for (ArrayList<String> arr : all) {
+            for (String raw : arr) {
+                String[] p = raw.split("\t", -1);
+                String text = p.length > 3 ? p[3] : "";
+                if (text.length() > longest.length()) longest = text;
+            }
+        }
+        return longest.isEmpty() ? "No messages found." : longest;
+    }
+
+    public static String searchMessageByID(String searchID) {
+        java.util.List<ArrayList<String>> all = Arrays.asList(sentMessagesArray, storedMessagesArray);
+        for (ArrayList<String> arr : all) {
+            for (String raw : arr) {
+                String[] p = raw.split("\t", -1);
+                if (p[0].equals(searchID))
+                    return "Recipient: " + p[2] + "\nMessage  : " + p[3];
+            }
+        }
+        return "Message ID not found.";
+    }
+
+    public static String searchMessagesByRecipient(String searchRecipient) {
+        StringBuilder sb = new StringBuilder();
+        for (String raw : storedMessagesArray) {
+            String[] p = raw.split("\t", -1);
+            if (p[2].equals(searchRecipient))
+                sb.append(p[3]).append("\n");
+        }
+        return sb.length() > 0 ? sb.toString().trim() : "No messages found for this recipient.";
+    }
+
+    public static String deleteMessageByHash(String hash) {
+        java.util.List<ArrayList<String>> all = Arrays.asList(storedMessagesArray, sentMessagesArray);
+        for (ArrayList<String> arr : all) {
+            Iterator<String> it = arr.iterator();
+            while (it.hasNext()) {
+                String[] p = it.next().split("\t", -1);
+                if (p[1].equalsIgnoreCase(hash)) {
+                    String text = p[3];
+                    it.remove();
+                    messageHashArray.remove(p[1]);
+                    return "Message: \"" + text + "\" successfully deleted.";
+                }
+            }
+        }
+        return "Message hash not found.";
+    }
+
+    public static String displayFullReport() {
+        if (storedMessagesArray.isEmpty()) return "No stored messages to display.";
+        StringBuilder sb = new StringBuilder("\n========== FULL STORED MESSAGES REPORT ==========\n");
+        for (String raw : storedMessagesArray) {
+            String[] p = raw.split("\t", -1);
+            sb.append("Hash      : ").append(p[1]).append("\n")
+              .append("Recipient : ").append(p[2]).append("\n")
+              .append("Message   : ").append(p[3]).append("\n")
+              .append("------------------------------------------\n");
+        }
+        return sb.toString();
+    }
+
+    // Setters and getters
+    public void setRecipient(String r) { recipient = r; }
+    public void setMessageText(String m) { messageText = m; }
+    public String getMessageID() { return messageID; }
+    public String getMessageHash() { return messageHash; }
+    public String getRecipient() { return recipient; }
+    public String getMessageText() { return messageText; }
+}
+
+// --------------------------- CLASS 3: STORED MESSAGES MENU ---------------------------
+class StoredMessagesMenu {
+    static void show(Scanner scanner) {
+        Message.loadStoredMessagesFromFile();
+        boolean running = true;
+        while (running) {
+            System.out.println("\n--- STORED MESSAGES ---");
+            System.out.println("a) Sender & recipient of all stored messages");
+            System.out.println("b) Longest message");
+            System.out.println("c) Search by message ID");
+            System.out.println("d) Search by recipient");
+            System.out.println("e) Delete message by hash");
+            System.out.println("f) Full message report");
+            System.out.println("q) Back to QuickChat menu");
+            System.out.print("Choice: ");
+            String choice = scanner.nextLine().toLowerCase().trim();
+            switch (choice) {
+                case "a": System.out.println(Message.displayStoredSenderRecipient()); break;
+                case "b": System.out.println("Longest message: " + Message.getLongestMessage()); break;
+                case "c":
+                    System.out.print("Enter message ID: ");
+                    System.out.println(Message.searchMessageByID(scanner.nextLine().trim()));
+                    break;
+                case "d":
+                    System.out.print("Enter recipient number: ");
+                    System.out.println(Message.searchMessagesByRecipient(scanner.nextLine().trim()));
+                    break;
+                case "e":
+                    System.out.print("Enter message hash: ");
+                    System.out.println(Message.deleteMessageByHash(scanner.nextLine().trim()));
+                    break;
+                case "f": System.out.println(Message.displayFullReport()); break;
+                case "q": running = false; break;
+                default: System.out.println("Invalid. Enter a-f or q.");
+            }
+        }
+    }
+}
+
+// --------------------------- CLASS 4: MAIN ---------------------------
+public class QuickChat {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        Login login = new Login();
+        boolean exit = false;
+
+        while (!exit) {
+            System.out.println("\n--- MAIN MENU ---");
+            System.out.println("1) Register");
+            System.out.println("2) Login");
+            System.out.println("3) Quit");
+            System.out.print("Your choice: ");
+            String choice = scanner.nextLine();
+
+            switch (choice) {
+                case "1":   // REGISTER
+                    System.out.println("\n--- REGISTER ---");
+                    String username;
+                    while (true) {
+                        System.out.print("Username (must contain _): ");
+                        username = scanner.nextLine();
+                        if (login.checkUserName(username)) break;
+                        System.out.println("Username is not correctly formatted, please ensure that your username contains an underscore.");
+                    }
+                    String password;
+                    while (true) {
+                        System.out.print("Password (8+ chars, 1 capital, 1 number, 1 special): ");
+                        password = scanner.nextLine();
+                        if (login.checkPasswordComplexity(password)) break;
+                        System.out.println("Password is not correctly formatted, ensure that the password contains at least 8 characters, a capital letter, a number, and a special character.");
+                    }
+                    String regCell;
+                    while (true) {
+                        System.out.print("Cell number (e.g. +27831234567): ");
+                        regCell = scanner.nextLine();
+                        if (login.checkCellPhoneNumber(regCell)) break;
+                        System.out.println("Cell phone number incorrectly formatted. Please ensure the number starts with + and is no more than 12 characters.");
+                    }
+                    System.out.print("First name: ");
+                    String firstName = scanner.nextLine();
+                    System.out.print("Last name: ");
+                    String lastName = scanner.nextLine();
+                    System.out.println(login.registerUser(username, password, regCell, firstName, lastName));
+                    break;
+
+                case "2":   // LOGIN + QUICKCHAT
+                    System.out.println("\n--- LOGIN ---");
+                    System.out.print("Username: ");
+                    String loginUser = scanner.nextLine();
+                    System.out.print("Password: ");
+                    String loginPass = scanner.nextLine();
+
+                    String loginStatus = login.returnLoginStatus(loginUser, loginPass);
+                    System.out.println(loginStatus + "\n");
+
+                    if (login.loginUser(loginUser, loginPass)) {
+                        System.out.println("You have successfully logged in!");
+                        // Part 3: set sender name
+                        Message.senderName = login.getFullName();
+
+                        System.out.print("How many messages do you want to send? ");
+                        int numMessages;
+                        try {
+                            numMessages = Integer.parseInt(scanner.nextLine());
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid number. Returning to menu.\n");
+                            break;
+                        }
+
+                        boolean chatRunning = true;
+                        int msgCount = 0;
+
+                        while (chatRunning) {
+                            System.out.println("\n--- QUICKCHAT ---");
+                            System.out.println("1) Send Messages");
+                            System.out.println("2) Show recently sent messages");
+                            System.out.println("3) Stored Messages");   // Part 3 new option
+                            System.out.println("4) Quit");
+                            System.out.print("Your choice: ");
+                            String chatChoice = scanner.nextLine();
+
+                            switch (chatChoice) {
+                                case "1":
+                                    for (int i = 0; i < numMessages; i++) {
+                                        System.out.println("\n--- MESSAGE " + (i + 1) + " ---");
+                                        Message msg = new Message(i + 1, scanner);
+                                        System.out.print("Enter recipient phone number: ");
+                                        String recipient = scanner.nextLine();
+                                        msg.setRecipient(recipient);
+                                        System.out.print("Enter your message: ");
+                                        String text = scanner.nextLine();
+                                        msg.setMessageText(text);
+                                        String hash = msg.createMessageHash();
+                                        System.out.println("\n--- MESSAGE DETAILS ---");
+                                        System.out.println("Message ID : " + msg.getMessageID());
+                                        System.out.println("Message Hash : " + hash);
+                                        System.out.println("Recipient : " + msg.getRecipient());
+                                        System.out.println("Message : " + msg.getMessageText());
+                                        String result = msg.sentMessage();
+                                        System.out.println(result);
+                                    }
+                                    System.out.println("\nAll messages have been entered.");
+                                    System.out.println(Message.printMessages());
+                                    System.out.println("Total messages sent: " + Message.returnTotalMessages());
+                                    break;
+
+                                case "2":
+                                    System.out.println("Coming Soon.");
+                                    break;
+
+                                case "3":   // Part 3: Stored Messages sub‑menu
+                                    StoredMessagesMenu.show(scanner);
+                                    break;
+
+                                case "4":
+                                    System.out.println(Message.printMessages());
+                                    System.out.println("Total messages sent: " + Message.returnTotalMessages());
+                                    chatRunning = false;
+                                    break;
+
+                                default:
+                                    System.out.println("Please enter 1, 2, 3, or 4.");
+                            }
+                        }
+                    }
+                    break;
+
+                case "3":
+                    System.out.println("Goodbye!");
+                    exit = true;
+                    break;
+
+                default:
+                    System.out.println("Please enter 1, 2, or 3.");
+            }
+        }
+        scanner.close();
+    }
+}
